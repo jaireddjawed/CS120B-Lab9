@@ -1,40 +1,44 @@
-/*	Author: lab
- *  	Partner(s) Name: Jaired Jawed
- *	Lab Section:
- *	Assignment: Lab #9  Exercise #1
+/*	Author: Jason Tang
+ *  	Partner(s) Name: none
+ *	Lab Section: 027
+ *	Assignment: Lab 10  Exercise 4
  *	Exercise Description: [optional - include for your own benefit]
- *
+ *	Demo: https://drive.google.com/drive/folders/17Lj00EERTAOPsR5L8tM3jGRO6wzX64mr?usp=sharing
  *	I acknowledge all content contained herein, excluding template or example
  *	code, is my own original work.
- *
- *
- *	Demo Link: 
  */
 #include <avr/io.h>
+//#include "io.h"
 #include <avr/interrupt.h>
 #ifdef _SIMULATE_
 #include "simAVRHeader.h"
 #endif
+enum ThreeLEDStates {ThreeStart, Zero, One, Two} ThreeLEDstate;
+enum BlinkingLEDStates {BlinkingStart, BlinkingInit, Blink} BlinkingLEDstate;
+enum CombineLEDStates {CombineStart, CombineInit} CombineLEDstate;
+enum SpeakerStates {SpeakerStart, SpeakerOff, SpeakerOn, SpeakerUp, SpeakerDown, SpeakerRelease} Speakerstate;
+unsigned char threeLEDs = 0x00;
+unsigned char blinkingLED = 0x00;
+unsigned char Speaker = 0x00;
+unsigned char i = 0;
+unsigned char j = 0;
+unsigned char array[] = {1, 2, 3, 4, 5, 6};
 
 volatile unsigned char TimerFlag = 0;
+void TimerISR() { TimerFlag = 1;}
 unsigned long _avr_timer_M = 1;
 unsigned long _avr_timer_cntcurr = 0;
-
-
-void TimerISR() { TimerFlag = 1; }
-
 void TimerOn() {
 	TCCR1B = 0x0B;
 	OCR1A = 125;
 	TIMSK1 = 0x02;
+	TCNT1 = 0;
 	_avr_timer_cntcurr = _avr_timer_M;
 	SREG |= 0x80;
 }
-
 void TimerOff() {
 	TCCR1B = 0x00;
 }
-
 ISR(TIMER1_COMPA_vect) {
 	_avr_timer_cntcurr--;
 	if (_avr_timer_cntcurr == 0) {
@@ -42,114 +46,151 @@ ISR(TIMER1_COMPA_vect) {
 		_avr_timer_cntcurr = _avr_timer_M;
 	}
 }
-
 void TimerSet (unsigned long M) {
 	_avr_timer_M = M;
 	_avr_timer_cntcurr = _avr_timer_M;
 }
 
-unsigned char threeLEDs = 0x00;
-enum ThreeLEDStates { ThreeLEDStart, ThreeLEDB0, ThreeLEDB1, ThreeLEDB2 } ThreeLED_state;
+void TickThreeLEDsSM() {
+	switch(ThreeLEDstate) {
+		case ThreeStart:	ThreeLEDstate = Zero; break;
+		
+		case Zero:	ThreeLEDstate = One;
+				break;
 
-void ThreeLEDsSM() {
-	switch (ThreeLED_state) {
-		case ThreeLEDStart:
-			ThreeLED_state = ThreeLEDB0;
-			break;
-		case ThreeLEDB0:
-			ThreeLED_state = ThreeLEDB1;
-			break;
-		case ThreeLEDB1:
-			ThreeLED_state = ThreeLEDB2;
-			break;
-		case ThreeLEDB2:
-			ThreeLED_state = ThreeLEDB0;
-			break;
-		default:
-			ThreeLED_state = ThreeLEDStart;
-			break;
+		case One:	ThreeLEDstate = Two;
+				break;
+
+		case Two:	ThreeLEDstate = Zero;
+				break;
+
+		default:	ThreeLEDstate = ThreeStart; break;
 	}
 
-	switch (ThreeLED_state) {
-		case ThreeLEDB0:
-			threeLEDs = 0x01;
-			break;
-		case ThreeLEDB1:
-			threeLEDs = 0x02;
-			break;
-		case ThreeLEDB2:
-			threeLEDs = 0x04;
-			break;
-		default:
-			break;
+	switch (ThreeLEDstate) {
+		case ThreeStart:        break;
+		case Zero:		threeLEDs = 0x01; break;
+		case One:		threeLEDs = 0x02; break;
+		case Two:		threeLEDs = 0x04; break;
+                default:        	break;
 	}
-
-	// set bit 0 to 1
-	// then set bit 1 to 1
-	// then set bit 2 to 1
-	// 1 second each
-	//	
 }
 
-
-unsigned char blinkingLED = 0x00;
-enum BlinkingLEDStates { BlinkLEDStart, BlinkLEDB2_ON, BlinkLEDB2_OFF } BlinkingLED_state;
-
-void BlinkingLEDSM() {
-	switch (BlinkingLED_state) {
-		case BlinkLEDStart:
-			BlinkingLED_state = BlinkLEDB2_ON;
-			break;
-		case BlinkLEDB2_ON:
-			BlinkingLED_state = BlinkLEDB2_OFF;
-			break;
-		case BlinkLEDB2_OFF:
-			BlinkingLED_state = BlinkLEDB2_ON;
-			break;
-		default:
-			BlinkingLED_state = BlinkLEDStart;
-			break;
-	}
-
-	switch (BlinkingLED_state) {
-		case BlinkLEDB2_ON:
-			blinkingLED = 0x01;
-			break;
-		case BlinkLEDB2_OFF:
-			blinkingLED = 0x00;
-			break;
-		default:
-			break;
-	}
-	// set bit 3 to 1 for 1 second
-	// then set to 0 for another second
+void TickBlinkingLEDSM() {
+	switch (BlinkingLEDstate) {
+                case BlinkingStart:     BlinkingLEDstate = BlinkingInit; break;
+                case BlinkingInit:      BlinkingLEDstate = Blink; break;
+                case Blink:     	BlinkingLEDstate = BlinkingInit; break;
+                default:        	BlinkingLEDstate = BlinkingStart; break;
+        }
+	switch (BlinkingLEDstate) {
+                case BlinkingStart:     break;
+                case BlinkingInit:      blinkingLED = 0x00; break;
+                case Blink:    		blinkingLED = 0x01; break;
+                default:        	break;
+        }
 }
 
-void CombineLEDsSM() {
+void TickCombineLEDsSM() {
+        switch (CombineLEDstate) {
+                case CombineStart:      CombineLEDstate = CombineInit; break;
+                case CombineInit:       CombineLEDstate = CombineInit; break;
+                default:		CombineLEDstate = CombineStart; break;
+        }
+        switch (CombineLEDstate) {
+                case CombineStart:      break;
+                case CombineInit:       PORTB = ((Speaker << 4) | (blinkingLED << 3) | (threeLEDs)); break;
+                default:       		break;
+        }
+}
 
-	// combine both variables from the other SM functions to PORTB
-	//
-	
-	PORTB = (blinkingLED << 3) | (threeLEDs);
+void TickSpeakerSM() {
+        switch (Speakerstate) {
+                case SpeakerStart:      Speakerstate = SpeakerOff; break;
+                case SpeakerOff:        if ((~PINA & 0x07) == 0x04) {
+						Speakerstate = SpeakerOn;
+					}
+					else if ((~PINA & 0x07) == 0x01) {
+						Speakerstate = SpeakerUp;
+					}
+					else if ((~PINA & 0x07) == 0x02) {
+                                                Speakerstate = SpeakerDown;
+                                        }
+					else {
+						Speakerstate = SpeakerOff;
+					}	
+					break;
+
+		case SpeakerOn:		if ((~PINA & 0x07) == 0x00) {
+						Speakerstate = SpeakerOff;
+					}
+					else {
+						Speakerstate = SpeakerOn;
+					}
+					break;
+
+		case SpeakerDown:	Speakerstate = SpeakerRelease;
+					break;
+
+		case SpeakerUp:		Speakerstate = SpeakerRelease;
+					break;
+
+		case SpeakerRelease:	if ((~PINA & 0x07) == 0x00) {Speakerstate = SpeakerOff;}
+					else {Speakerstate = SpeakerRelease;}
+					break;
+
+                default:                Speakerstate = SpeakerStart; break;
+        }
+        switch (Speakerstate) {
+                case SpeakerStart:      break;
+
+                case SpeakerOff:        Speaker = 0x00; i = 0; break;
+
+		case SpeakerOn:		if (i <= array[j]) {Speaker = 0x01;}
+					else if (i <= (array[j] * 2)) {Speaker = 0x00;}
+				        else {i = 0;}
+					++i;
+					break;
+
+		case SpeakerUp:		if (j > 0) {--j;}
+					break;
+
+		case SpeakerDown:	if (j < 6) {++j;}
+					break;
+
+                default:                break;
+        }
 }
 
 int main(void) {
-    /* Insert DDR and PORT initializations */
-	DDRA = 0x00; PORTA = 0xFF;
-	DDRB = 0xFF; PORTB = 0x00;
+    DDRA = 0x00; PORTA = 0xFF;
+    DDRB = 0xFF; PORTB = 0x00;
+    unsigned long ThreeElapsed = 0;
+    unsigned long BlinkingElapsed = 0;
+    const unsigned long timerPeriod = 1;
+    TimerSet(1);
+    TimerOn();
+    ThreeLEDstate = ThreeStart;
+    BlinkingLEDstate = BlinkingStart;
+    CombineLEDstate = CombineStart;
+    Speakerstate = SpeakerStart;
 
-	TimerSet(1000);
-	TimerOn();
-
-
-
-    /* Insert your solution below */
     while (1) {
-	ThreeLEDsSM();
-	BlinkingLEDSM();
-	CombineLEDsSM();
-	while (!TimerFlag) {};
+	if (ThreeElapsed >= 300) {
+		TickThreeLEDsSM();
+		ThreeElapsed = 0;
+	}
+	if (BlinkingElapsed >= 1000) {
+		TickBlinkingLEDSM();
+		BlinkingElapsed = 0;
+	}
+	TickSpeakerSM();
+	TickCombineLEDsSM();
+	while(!TimerFlag) {};
 	TimerFlag = 0;
+	ThreeElapsed += timerPeriod;
+	BlinkingElapsed += timerPeriod;
+	
     }
-    return 1;
+    return 0;
 }
